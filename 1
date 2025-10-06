@@ -1,0 +1,125 @@
+using System;
+using System.Collections.Generic;
+
+class Product
+{
+    private string name;
+    private decimal price;
+    private int quantity;
+    protected string category;
+    internal string description;
+
+    public Product(string name, decimal price, int quantity, string category, string description)
+    {
+        this.name = name;
+        this.price = price;
+        this.quantity = quantity;
+        this.category = category;
+        this.description = description;
+    }
+
+    public decimal GetTotalPrice() => price * quantity;
+
+    public void UpdateQuantity(int amount)
+    {
+        quantity += amount;
+        if (quantity < 0) quantity = 0;
+    }
+
+    public string GetProductInfo() =>
+        $"{name} ({category}) — {description}. Цена: {price}₽, количество: {quantity}, всего на сумму: {GetTotalPrice()}₽";
+}
+
+class Seller
+{
+    private string name;
+    private string employeeId;
+    protected decimal salary;
+    internal string contactInfo;
+
+    private List<Product> products = new();
+
+    public Seller(string name, string id, decimal salary, string contact)
+    {
+        this.name = name;
+        this.employeeId = id;
+        this.salary = salary;
+        this.contactInfo = contact;
+    }
+
+    public void AddProduct(Product product)
+    {
+        products.Add(product);
+        Console.WriteLine($"{name} добавил товар: {product.GetProductInfo()}");
+    }
+
+    public void SellProduct(Product product, int qty)
+    {
+        product.UpdateQuantity(-qty);
+        Console.WriteLine($"{name} продал {qty} ед. товара.");
+    }
+
+    public string GetSellerInfo() =>
+        $"Продавец: {name}, ID: {employeeId}, зарплата: {salary}₽, контакт: {contactInfo}";
+}
+
+class Store
+{
+    private string storeName;
+    private string location;
+    public string storeHours;
+
+    private List<Seller> sellers = new();
+    private List<Product> products = new();
+
+    public Store(string name, string location, string hours)
+    {
+        this.storeName = name;
+        this.location = location;
+        this.storeHours = hours;
+    }
+
+    public void AddSeller(Seller seller)
+    {
+        sellers.Add(seller);
+        Console.WriteLine($"Добавлен продавец: {seller.GetSellerInfo()}");
+    }
+
+    public void ListProducts()
+    {
+        Console.WriteLine("\nТовары в магазине:");
+        foreach (var seller in sellers)
+        {
+            Console.WriteLine($"— продавец {seller.GetSellerInfo()}");
+        }
+    }
+
+    public string GetStoreInfo() =>
+        $"Магазин: {storeName}, адрес: {location}, часы работы: {storeHours}";
+}
+
+class Program
+{
+    static void Main()
+    {
+        // Создаём продукты
+        Product apple = new("Яблоко", 50m, 100, "Фрукты", "Свежие зелёные яблоки");
+        Product milk = new("Молоко", 80m, 40, "Молочные продукты", "1 литр, 3.2%");
+
+        // Создаём продавца
+        Seller seller = new("Анна", "E001", 60000m, "anna@store.com");
+        seller.AddProduct(apple);
+        seller.AddProduct(milk);
+        seller.SellProduct(apple, 10);
+
+        // Создаём магазин
+        Store store = new("Фермерский уголок", "ул. Центральная, 15", "09:00–21:00");
+        store.AddSeller(seller);
+
+        Console.WriteLine();
+        Console.WriteLine(store.GetStoreInfo());
+        Console.WriteLine();
+        Console.WriteLine(apple.GetProductInfo());
+        Console.WriteLine(milk.GetProductInfo());
+    }
+}
