@@ -1,0 +1,287 @@
+using System;
+using System.Collections.Generic;
+
+// Делегат для уведомлений
+public delegate void OrderStatusChanged(Order order, OrderStatus oldStatus, OrderStatus newStatus);
+
+public enum OrderStatus
+{
+    Created,      // Создан
+    InProgress,   // В работе
+    Completed     // Завершён
+}
+
+// ===================== МОДЕЛИ =====================
+
+public class Customer
+{
+    public string FirstName { get; set; }
+    public string LastName  { get; set; }
+    public string PhoneNumber { get; set; }
+
+    public Customer(string firstName, string lastName, string phoneNumber)
+    {
+        FirstName    = firstName;
+        LastName     = lastName;
+        PhoneNumber  = phoneNumber;
+    }
+
+    public string FullName => $"{LastName} {FirstName}";
+
+    public override string ToString()
+    {
+        return $"{FullName} | тел.: {PhoneNumber}";
+    }
+}
+
+public class Employee
+{
+    public string FirstName { get; set; }
+    public string LastName  { get; set; }
+    public string Position  { get; set; }
+    public int OrdersProcessed { get; private set; }
+
+    public Employee(string firstName, string lastName, string position)
+    {
+        FirstName = firstName;
+        LastName  = lastName;
+        Position  = position;
+    }
+
+    public string FullName => $"{LastName} {FirstName}";
+
+    public void IncrementOrdersProcessed()
+    {
+        OrdersProcessed++;
+    }
+
+    public override string ToString()
+    {
+        return $"{FullName} | должность: {Position} | обработано заказов: {OrdersProcessed}";
+    }
+}
+
+public class Order
+{
+    public int OrderId { get; private set; }
+    public string Description { get; set; }
+
+    public Employee AssignedEmployee { get; private set; }
+    public Customer Customer { get; private set; }
+
+    public OrderStatus Status { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+
+    // Событие изменения статуса
+    public event OrderStatusChanged? StatusChanged;
+
+    public Order(int id, string description, Customer customer)
+    {
+        OrderId     = id;
+        Description = description;
+        Customer    = customer;
+        Status      = OrderStatus.Created;
+        CreatedAt   = DateTime.Now;
+    }
+
+    public void AssignEmployee(Employee employee)
+    {
+        AssignedEmployee = employee;
+    }
+
+    public void ChangeStatus(OrderStatus newStatus)
+    {
+        if (newStatus == Status) return;
+
+        var old = Status;
+        Status = newStatus;
+
+        // уведомление
+        StatusChanged?.Invoke(this, old, newStatus);
+
+        // если заказ завершён – увеличиваем счётчик у сотрудника
+        if (Status == OrderStatus.Completed && AssignedEmployee != null)
+        {
+            AssignedEmployee.IncrementOrdersProcessed();
+        }
+    }
+
+    public override string ToString()
+    {
+        string employeeName = AssignedEmployee != null ? AssignedEmployee.FullName : "не назначен";
+        return $"Заказ #{OrderId} | {Description}\n" +
+               $"   Заказчик: {Customer.FullName}\n" +
+               $"   Ответственный: {employeeName}\n" +
+               $"   Статус: {Status} | создан: {CreatedAt:g}";
+    }
+}
+
+public class Company
+{
+    public string Name { get; set; }
+    public List<Employee> Employees { get; } = new List<Employee>();
+    public List<Order> Orders { get; } = new List<Order>();
+    public List<Customer> Customers { get; } = new List<Customer>();
+
+    private int _nextOrderId = 1;
+
+    public Company(string name)
+    {
+        Name = name;
+    }
+
+    // --- работа с сущностями ---
+
+    public void AddEmployee(Employee employee)
+    {
+        Employees.Add(employee);
+    }
+
+    public void AddCustomer(Customer customer)
+    {
+        Customers.Add(customer);
+    }
+
+    public Order CreateOrder(string description, Customer customer)
+    {
+        var order = new Order(_nextOrderId++, description, customer);
+
+        // подписка на событие
+        order.StatusChanged += OnOrderStatusChanged;
+
+        Orders.Add(order);
+        return order;
+    }
+
+    public void AssignEmployeeToOrder(int orderId, Employee employee)
+    {
+        var order = Orders.Find(o => o.OrderId == orderId);
+        if (order == null) return;
+
+        order.AssignEmployee(employee);
+    }
+
+    public List<Order> GetOrdersByStatus(OrderStatus status)
+    {
+        return Orders.FindAll(o => o.Status == status);
+    }
+
+    public List<Order> FindOrdersByCustomer(string customerLastName)
+    {
+        return Orders.FindAll(o => o.Customer.LastName.Equals(customerLastName,
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Отчёт по сотрудникам
+    public void ShowEmployeesReport()
+    {
+        Console.WriteLine("===== Отчёт по сотрудникам =====");
+        foreach (var emp in Employees)
+        {
+            Console.WriteLine(emp);
+        }
+        Console.WriteLine();
+    }
+
+    // Обработчик события
+    private void OnOrderStatusChanged(Order order, OrderStatus oldStatus, OrderStatus newStatus)
+    {
+        string empName = order.AssignedEmployee != null
+            ? order.AssignedEmployee.FullName
+            : "Ответственный не назначен";
+
+        Console.WriteLine();
+        Console.WriteLine(">>> Уведомление сотруднику: {0}", empName);
+        Console.WriteLine("    Статус заказа #{0} изменён: {1} -> {2}", 
+            order.OrderId, oldStatus, newStatus);
+        Console.WriteLine();
+    }
+}
+
+// ===================== ПРОГРАММА =====================
+
+public class Program
+{
+    public static void Main()
+    {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+        var company = new Company("ООО «ТехСервис»");
+
+        // --- добавляем сотрудников ---
+        var emp1 = new Employee("Иван", "Иванов", "Менеджер по работе с клиентами");
+        var emp2 = new Employee("Мария", "Петрова", "Старший менеджер");
+
+        company.AddEmployee(emp1);
+        company.AddEmployee(emp2);
+
+        // --- добавляем заказчиков ---
+        var cust1 = new Customer("Алексей", "Сидоров", "+7-900-111-22-33");
+        var cust2 = new Customer("Ольга", "Кузнецова", "+7-900-222-33-44");
+
+        company.AddCustomer(cust1);
+        company.AddCustomer(cust2);
+
+        // --- создаём заказы ---
+        var order1 = company.CreateOrder("Настройка серверов", cust1);
+        var order2 = company.CreateOrder("Обслуживание офисной техники", cust2);
+        var order3 = company.CreateOrder("Подключение удалённых рабочих мест", cust1);
+
+        // назначаем ответственных
+        company.AssignEmployeeToOrder(order1.OrderId, emp1);
+        company.AssignEmployeeToOrder(order2.OrderId, emp2);
+        company.AssignEmployeeToOrder(order3.OrderId, emp1);
+
+        // приветственный экран
+        Console.WriteLine("===================================================");
+        Console.WriteLine(" Система учёта заказов компании: {0}", company.Name);
+        Console.WriteLine("===================================================\n");
+
+        Console.WriteLine("Текущие заказы в системе:\n");
+        foreach (var o in company.Orders)
+        {
+            Console.WriteLine(o);
+            Console.WriteLine("---------------------------------------------------");
+        }
+
+        // имитируем работу системы
+        Console.WriteLine("\n>>> Менеджер меняет статусы заказов...\n");
+
+        order1.ChangeStatus(OrderStatus.InProgress);
+        order1.ChangeStatus(OrderStatus.Completed);
+
+        order2.ChangeStatus(OrderStatus.InProgress);
+
+        order3.ChangeStatus(OrderStatus.InProgress);
+        order3.ChangeStatus(OrderStatus.Completed);
+
+        // просмотр заказов по статусу
+        Console.WriteLine("===== Заказы в статусе 'В работе' =====");
+        foreach (var o in company.GetOrdersByStatus(OrderStatus.InProgress))
+        {
+            Console.WriteLine(o);
+            Console.WriteLine("---------------------------------------------------");
+        }
+
+        Console.WriteLine("===== Завершённые заказы =====");
+        foreach (var o in company.GetOrdersByStatus(OrderStatus.Completed))
+        {
+            Console.WriteLine(o);
+            Console.WriteLine("---------------------------------------------------");
+        }
+
+        // поиск заказов по заказчику
+        Console.WriteLine("===== Поиск заказов заказчика Сидоров =====");
+        foreach (var o in company.FindOrdersByCustomer("Сидоров"))
+        {
+            Console.WriteLine(o);
+            Console.WriteLine("---------------------------------------------------");
+        }
+
+        // отчёт по сотрудникам
+        company.ShowEmployeesReport();
+
+        Console.WriteLine("Нажмите любую клавишу для выхода...");
+        Console.ReadKey();
+    }
+}
